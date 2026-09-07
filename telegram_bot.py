@@ -193,15 +193,25 @@ def main():
             answer_callback(cb["id"])
             pending = state.get("pending", [])
             if data == "cancel":
+                n = len(pending)
                 state["pending"] = []
-                send("❌ Cancelled. Nothing added.")
+                send(f"❌ Cancelled. {n} item(s) discarded, nothing added." if n
+                     else "❌ Cancelled.")
             elif data == "add:all":
-                if projects is None:
-                    projects = notion_projects()
-                for item in pending:
-                    create_notion_item(item, projects)
-                send(f"✅ Added {len(pending)} item(s) to Command Center.")
-                state["pending"] = []
+                if not pending:
+                    send("Nothing pending to add.")
+                else:
+                    if projects is None:
+                        projects = notion_projects()
+                    added = 0
+                    for item in pending:
+                        try:
+                            create_notion_item(item, projects)
+                            added += 1
+                        except Exception as e:
+                            send(f"⚠️ Failed to add '{item.get('name')}': {e}")
+                    send(f"✅ Added {added} item(s) to Command Center.")
+                    state["pending"] = []
             elif data.startswith("add:"):
                 try:
                     idx = int(data.split(":")[1]) - 1
@@ -210,8 +220,23 @@ def main():
                 if 0 <= idx < len(pending):
                     if projects is None:
                         projects = notion_projects()
-                    create_notion_item(pending[idx], projects)
-                    send(f"✅ Added: {pending[idx].get('name')}")
+                    item = pending[idx]
+                    try:
+                        create_notion_item(item, projects)
+                        # remove the added item so it can't be added twice
+                        remaining = [p for j, p in enumerate(pending) if j != idx]
+                        state["pending"] = remaining
+                        if remaining:
+                            lines = [f"✅ Added: {item.get('name')}", "",
+                                     "Still pending — confirm below:", ""]
+                            lines += [fmt_item(i + 1, it) for i, it in enumerate(remaining)]
+                            send("\n".join(lines), buttons=confirm_buttons(len(remaining)))
+                        else:
+                            send(f"✅ Added: {item.get('name')}\n\nAll done — nothing left pending.")
+                    except Exception as e:
+                        send(f"⚠️ Failed to add '{item.get('name')}': {e}")
+                else:
+                    send("That item is no longer pending.")
             save_state(state)
             continue
 

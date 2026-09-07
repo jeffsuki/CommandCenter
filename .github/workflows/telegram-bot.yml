@@ -2,7 +2,7 @@ name: Telegram bot (inbound)
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # poll every 5 minutes
+    - cron: "*/2 * * * *"   # poll every 2 minutes
   workflow_dispatch:
 
 # allow the job to commit state.json back to the repo
