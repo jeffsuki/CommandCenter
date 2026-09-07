@@ -1,15 +1,4 @@
 {
-  "offset": 561683736,
-  "pending": [
-    {
-      "type": "meeting",
-      "name": "Standby Evangelista",
-      "date": "2026-09-09",
-      "start_time": "15:00",
-      "end_time": null,
-      "company": "Church",
-      "priority": null,
-      "project_hint": null
-    }
-  ]
+  "offset": 561683745,
+  "pending": []
 }
