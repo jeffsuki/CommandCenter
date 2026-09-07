@@ -22,15 +22,50 @@ import requests
 from zoneinfo import ZoneInfo
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "")  # optional override
 TIMEZONE = os.environ.get("TIMEZONE", "Asia/Jakarta")
 
 COMPANIES = ["Above & Beyond", "Felindo", "Stock Market", "Personal", "Church"]
 
-GEMINI_URL = (
-    f"https://generativelanguage.googleapis.com/v1beta/models/"
-    f"{GEMINI_MODEL}:generateContent"
-)
+API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
+
+# Candidate models to try, in preference order (free-tier friendly first).
+# If GEMINI_MODEL env is set, it's tried first.
+CANDIDATE_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-flash-latest",
+    "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-flash-lite-latest",
+]
+
+
+def list_available_models():
+    """Return model names on this key that support generateContent."""
+    r = requests.get(f"{API_ROOT}/models",
+                     headers={"x-goog-api-key": GEMINI_API_KEY}, timeout=30)
+    r.raise_for_status()
+    out = []
+    for m in r.json().get("models", []):
+        if "generateContent" in m.get("supportedGenerationMethods", []):
+            out.append(m["name"].replace("models/", ""))
+    return out
+
+
+def pick_model():
+    """Choose a usable model: env override, else first candidate the key supports."""
+    available = set(list_available_models())
+    order = ([GEMINI_MODEL] if GEMINI_MODEL else []) + CANDIDATE_MODELS
+    for name in order:
+        if name and name in available:
+            return name
+    # last resort: any available flash model, else any available model
+    flash = [m for m in available if "flash" in m]
+    if flash:
+        return sorted(flash)[0]
+    if available:
+        return sorted(available)[0]
+    raise RuntimeError("No Gemini models available for this API key.")
 
 
 def _today_str():
@@ -61,12 +96,14 @@ Message: {json.dumps(message)}"""
 
 
 def parse_message(message):
+    model = pick_model()
+    url = f"{API_ROOT}/models/{model}:generateContent"
     body = {
         "contents": [{"parts": [{"text": build_prompt(message)}]}],
         "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
     }
     r = requests.post(
-        GEMINI_URL,
+        url,
         headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
         json=body,
         timeout=45,
@@ -74,7 +111,6 @@ def parse_message(message):
     r.raise_for_status()
     data = r.json()
     text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    # responseMimeType=json should give clean JSON; guard anyway
     if text.startswith("```"):
         text = text.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0]
     items = json.loads(text)
@@ -85,5 +121,11 @@ def parse_message(message):
 
 if __name__ == "__main__":
     import sys
-    msg = " ".join(sys.argv[1:]) or "meeting with christy jul 10 10-12 at the therapy center"
-    print(json.dumps(parse_message(msg), indent=2))
+    if len(sys.argv) > 1 and sys.argv[1] == "--list":
+        print("Models supporting generateContent on your key:")
+        for m in list_available_models():
+            print("  ", m)
+        print("\nChosen:", pick_model())
+    else:
+        msg = " ".join(sys.argv[1:]) or "meeting with christy jul 10 10-12 at the therapy center"
+        print(json.dumps(parse_message(msg), indent=2))
