@@ -1,0 +1,42 @@
+name: Telegram bot (inbound)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # poll every 5 minutes
+  workflow_dispatch:
+
+# allow the job to commit state.json back to the repo
+permissions:
+  contents: write
+
+# never run two polls at once (avoids double-processing)
+concurrency:
+  group: telegram-bot
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python telegram_bot.py
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_TASKS_DB_ID: ${{ secrets.NOTION_TASKS_DB_ID }}
+          NOTION_PROJECTS_DB_ID: ${{ secrets.NOTION_PROJECTS_DB_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-2.5-flash
+          TIMEZONE: Asia/Jakarta
+      - name: Commit updated state
+        run: |
+          git config user.name "cc-bot"
+          git config user.email "cc-bot@users.noreply.github.com"
+          git add state.json || true
+          git commit -m "update bot state" || echo "no state change"
+          git push || echo "nothing to push"

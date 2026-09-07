@@ -1,0 +1,24 @@
+name: Telegram reminders
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # 07:00 Asia/Jakarta (00:00 UTC) - morning
+    - cron: "0 6 * * *"   # 13:00 Asia/Jakarta (06:00 UTC) - after lunch
+  workflow_dispatch:        # run manually to test
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python telegram_reminder.py
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_TASKS_DB_ID: ${{ secrets.NOTION_TASKS_DB_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TIMEZONE: Asia/Jakarta

@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""
+Telegram twice-daily reminder.
+
+Reads open tasks (Status != Done, not Archived) that are due today or overdue
+from the Command Center Tasks database, groups them by Company, and sends a
+digest to Telegram. Meant to run on a schedule (morning + after lunch).
+"""
+
+import os
+import datetime
+import requests
+from zoneinfo import ZoneInfo
+
+NOTION_TOKEN       = os.environ["NOTION_TOKEN"]
+NOTION_DB_ID       = os.environ["NOTION_TASKS_DB_ID"]
+TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
+TIMEZONE           = os.environ.get("TIMEZONE", "Asia/Jakarta")
+
+TZ = ZoneInfo(TIMEZONE)
+
+NOTION_HEADERS = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Notion-Version": "2022-06-28",
+    "Content-Type": "application/json",
+}
+
+PRIORITY_EMOJI = {"Urgent": "🔴", "High": "🟠", "Medium": "🔵", "Low": "⚪"}
+
+
+def query_due_tasks():
+    today = datetime.datetime.now(TZ).date().isoformat()
+    url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
+    payload = {
+        "filter": {
+            "and": [
+                {"property": "Status", "status": {"does_not_equal": "Done"}},
+<<<<<<< HEAD
+                {"property": "Status", "status": {"does_not_equal": "Cancelled"}},
+=======
+>>>>>>> c16a083a667ea0bcaf80fff150cf65aea1bfaae8
+                {"property": "Archive", "checkbox": {"equals": False}},
+                {"property": "Date", "date": {"on_or_before": today}},
+            ]
+        },
+        "sorts": [{"property": "Date", "direction": "ascending"}],
+    }
+    results = []
+    while True:
+        r = requests.post(url, headers=NOTION_HEADERS, json=payload, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        results.extend(data["results"])
+        if data.get("has_more"):
+            payload["start_cursor"] = data["next_cursor"]
+        else:
+            break
+    return results
+
+
+def title_of(page):
+    parts = page["properties"].get("Name", {}).get("title", [])
+    return "".join(p.get("plain_text", "") for p in parts).strip() or "(untitled)"
+
+
+def select_of(page, prop):
+    s = page["properties"].get(prop, {}).get("select")
+    return s["name"] if s else None
+
+
+def date_of(page):
+    d = page["properties"].get("Date", {}).get("date")
+    return d["start"][:10] if d and d.get("start") else None
+
+
+def build_message(tasks):
+    now = datetime.datetime.now(TZ)
+    hour = now.hour
+    greeting = "☀️ Morning brief" if hour < 11 else "🕐 Afternoon check-in"
+    header = f"{greeting} — {now.strftime('%a %d %b %Y')}"
+
+    if not tasks:
+        return f"{header}\n\n✅ Nothing due today. All clear!"
+
+    today = now.date().isoformat()
+    by_company = {}
+    for t in tasks:
+        by_company.setdefault(select_of(t, "Company") or "No company", []).append(t)
+
+    lines = [header, "", f"You have {len(tasks)} item(s) due or overdue:", ""]
+    for company in sorted(by_company):
+        lines.append(f"🏢 <b>{company}</b>")
+        for t in by_company[company]:
+            pr = select_of(t, "Priority")
+            emoji = PRIORITY_EMOJI.get(pr, "•")
+            d = date_of(t)
+            overdue = " ⚠️ overdue" if d and d < today else ""
+            lines.append(f"  {emoji} {title_of(t)}{overdue}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+def send_telegram(text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    r = requests.post(url, json={
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }, timeout=30)
+    r.raise_for_status()
+    print("Sent Telegram digest.")
+
+
+def main():
+    tasks = query_due_tasks()
+    print(f"Found {len(tasks)} due/overdue task(s).")
+    send_telegram(build_message(tasks))
+
+
+if __name__ == "__main__":
+    main()
