@@ -96,27 +96,48 @@ Message: {json.dumps(message)}"""
 
 
 def parse_message(message):
-    model = pick_model()
-    url = f"{API_ROOT}/models/{model}:generateContent"
-    body = {
-        "contents": [{"parts": [{"text": build_prompt(message)}]}],
-        "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
-    }
-    r = requests.post(
-        url,
-        headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
-        json=body,
-        timeout=45,
-    )
-    r.raise_for_status()
-    data = r.json()
-    text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    if text.startswith("```"):
-        text = text.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0]
-    items = json.loads(text)
-    if isinstance(items, dict):
-        items = [items]
-    return items
+    """Try models in order; if one 404s or errors, fall back to the next."""
+    available = list_available_models()
+    order = ([GEMINI_MODEL] if GEMINI_MODEL else []) + CANDIDATE_MODELS
+    # keep only models the key actually lists, preserve order, then append any
+    # other available flash models as further fallbacks
+    tried = []
+    candidates = [m for m in order if m in available]
+    candidates += [m for m in available if "flash" in m and m not in candidates]
+    if not candidates:
+        candidates = available  # last resort: anything
+
+    body_text = build_prompt(message)
+    last_err = None
+    for model in candidates:
+        tried.append(model)
+        url = f"{API_ROOT}/models/{model}:generateContent"
+        body = {
+            "contents": [{"parts": [{"text": body_text}]}],
+            "generationConfig": {"temperature": 0,
+                                 "responseMimeType": "application/json"},
+        }
+        try:
+            r = requests.post(
+                url,
+                headers={"x-goog-api-key": GEMINI_API_KEY,
+                         "Content-Type": "application/json"},
+                json=body,
+                timeout=45,
+            )
+            r.raise_for_status()
+            data = r.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if text.startswith("```"):
+                text = text.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0]
+            items = json.loads(text)
+            if isinstance(items, dict):
+                items = [items]
+            return items
+        except Exception as e:
+            last_err = e
+            continue  # try next model
+    raise RuntimeError(f"All models failed (tried {tried}). Last error: {last_err}")
 
 
 if __name__ == "__main__":

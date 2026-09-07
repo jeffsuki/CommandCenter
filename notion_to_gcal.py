@@ -34,15 +34,11 @@ NOTION_HEADERS = {
 
 
 def notion_query_meetings():
-<<<<<<< HEAD
     """Return all Notion pages tagged 'Meeting' that have a Date.
 
     Includes Done/Archived ones too, so we can CANCEL their calendar events
     (Phase 1.5). We decide create-vs-cancel per page in main().
     """
-=======
-    """Return all Notion pages tagged 'Meeting' that have a Date."""
->>>>>>> c16a083a667ea0bcaf80fff150cf65aea1bfaae8
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     payload = {
         "filter": {
@@ -65,7 +61,6 @@ def notion_query_meetings():
     return results
 
 
-<<<<<<< HEAD
 def is_removed(page):
     """True if the meeting should NOT be on the calendar (Done, Cancelled, or Archived)."""
     status = page["properties"].get("Status", {}).get("status")
@@ -88,8 +83,6 @@ def cancel_event(service, page):
             print(f"  ERROR removing ({e.resp.status}): {title_of(page)}")
 
 
-=======
->>>>>>> c16a083a667ea0bcaf80fff150cf65aea1bfaae8
 def google_service():
     creds = Credentials(
         token=None,
@@ -169,14 +162,10 @@ def main():
     meetings = notion_query_meetings()
     print(f"Found {len(meetings)} meeting(s) tagged 'Meeting' with a date.")
     for page in meetings:
-<<<<<<< HEAD
         if is_removed(page):
             cancel_event(service, page)      # Phase 1.5: Done/Archived -> remove
         else:
             upsert(service, build_event(page))
-=======
-        upsert(service, build_event(page))
->>>>>>> c16a083a667ea0bcaf80fff150cf65aea1bfaae8
     print("Done.")
 
 

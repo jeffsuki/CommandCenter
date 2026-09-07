@@ -36,10 +36,7 @@ def query_due_tasks():
         "filter": {
             "and": [
                 {"property": "Status", "status": {"does_not_equal": "Done"}},
-<<<<<<< HEAD
                 {"property": "Status", "status": {"does_not_equal": "Cancelled"}},
-=======
->>>>>>> c16a083a667ea0bcaf80fff150cf65aea1bfaae8
                 {"property": "Archive", "checkbox": {"equals": False}},
                 {"property": "Date", "date": {"on_or_before": today}},
             ]

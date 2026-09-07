@@ -1,0 +1,13 @@
+# Never commit Google OAuth credentials
+client_secret.json
+credentials.json
+token.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS noise
+.DS_Store
