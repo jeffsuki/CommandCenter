@@ -2,7 +2,7 @@ name: Telegram bot (inbound)
 
 on:
   schedule:
-    - cron: "*/2 * * * *"   # poll every 2 minutes
+    - cron: "*/10 * * * *"  # poll every 10 minutes (steadier than */2 on free tier)
   workflow_dispatch:
 
 # allow the job to commit state.json back to the repo
@@ -22,6 +22,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
       - run: pip install -r requirements.txt
       - run: python telegram_bot.py
         env:

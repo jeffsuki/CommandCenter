@@ -71,6 +71,21 @@ def date_of(page):
     return d["start"][:10] if d and d.get("start") else None
 
 
+def has_meeting_tag(page):
+    tags = page["properties"].get("Tags", {}).get("multi_select", [])
+    return any(t.get("name") == "Meeting" for t in tags)
+
+
+def time_of(page):
+    """Return 'HH:MM' if the Date has a time component, else None."""
+    d = page["properties"].get("Date", {}).get("date")
+    start = d.get("start") if d else None
+    if start and "T" in start:
+        # start looks like 2026-07-10T10:00:00+07:00
+        return start[11:16]
+    return None
+
+
 def build_message(tasks):
     now = datetime.datetime.now(TZ)
     hour = now.hour
@@ -81,20 +96,40 @@ def build_message(tasks):
         return f"{header}\n\n✅ Nothing due today. All clear!"
 
     today = now.date().isoformat()
-    by_company = {}
-    for t in tasks:
-        by_company.setdefault(select_of(t, "Company") or "No company", []).append(t)
 
-    lines = [header, "", f"You have {len(tasks)} item(s) due or overdue:", ""]
-    for company in sorted(by_company):
-        lines.append(f"🏢 <b>{company}</b>")
-        for t in by_company[company]:
-            pr = select_of(t, "Priority")
-            emoji = PRIORITY_EMOJI.get(pr, "•")
-            d = date_of(t)
-            overdue = " ⚠️ overdue" if d and d < today else ""
-            lines.append(f"  {emoji} {title_of(t)}{overdue}")
+    # split meetings vs regular tasks
+    meetings = [t for t in tasks if has_meeting_tag(t)]
+    todos = [t for t in tasks if not has_meeting_tag(t)]
+
+    lines = [header, ""]
+
+    # --- Meetings section: "Time - Title", sorted by time ---
+    if meetings:
+        # sort: timed meetings first (by time), then any without a time
+        meetings.sort(key=lambda m: (time_of(m) is None, time_of(m) or ""))
+        lines.append("📅 <b>Meetings</b>")
+        for m in meetings:
+            t = time_of(m)
+            prefix = t if t else "All day"
+            lines.append(f"{prefix} - {title_of(m)}")
         lines.append("")
+
+    # --- Tasks section: grouped by company ---
+    if todos:
+        by_company = {}
+        for t in todos:
+            by_company.setdefault(select_of(t, "Company") or "No company", []).append(t)
+        lines.append("✅ <b>Tasks due</b>")
+        for company in sorted(by_company):
+            lines.append(f"🏢 <b>{company}</b>")
+            for t in by_company[company]:
+                pr = select_of(t, "Priority")
+                emoji = PRIORITY_EMOJI.get(pr, "•")
+                d = date_of(t)
+                overdue = " ⚠️ overdue" if d and d < today else ""
+                lines.append(f"  {emoji} {title_of(t)}{overdue}")
+            lines.append("")
+
     return "\n".join(lines).strip()
 
 
