@@ -1,13 +1,13 @@
 {
-  "offset": 561683754,
+  "offset": 561683756,
   "pending": [
     {
       "type": "meeting",
-      "name": "Meeting with evangelista",
+      "name": "Meeting with Mei Qi",
       "date": "2026-09-08",
       "start_time": "15:00",
       "end_time": null,
-      "company": "Church",
+      "company": "Personal",
       "priority": null,
       "project_hint": null
     }
