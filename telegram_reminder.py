@@ -30,6 +30,9 @@ PRIORITY_EMOJI = {"Urgent": "🔴", "High": "🟠", "Medium": "🔵", "Low": "�
 
 
 def query_due_tasks():
+    """Fetch open, non-cancelled, non-archived items dated today or earlier
+    (for overdue tasks) PLUS today's meetings. We fetch up to end of today and
+    filter passed meetings out in build_message()."""
     today = datetime.datetime.now(TZ).date().isoformat()
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     payload = {
@@ -54,6 +57,29 @@ def query_due_tasks():
         else:
             break
     return results
+
+
+def meeting_passed(page):
+    """True if this meeting is fully over (its END time is in the past), so skip
+    it. Uses end time when available; falls back to start time; for date-only
+    meetings, passed only once the day is over."""
+    d = page["properties"].get("Date", {}).get("date")
+    if not d:
+        return False
+    start = d.get("start")
+    end = d.get("end")
+    if not start:
+        return False
+    now = datetime.datetime.now(TZ)
+    reference = end or start  # prefer end time; fall back to start
+    if "T" in reference:  # has a time
+        try:
+            dt = datetime.datetime.fromisoformat(reference)
+            return dt < now
+        except ValueError:
+            return False
+    else:  # date-only: passed only after that day is over
+        return reference < now.date().isoformat()
 
 
 def title_of(page):
@@ -98,7 +124,7 @@ def build_message(tasks):
     today = now.date().isoformat()
 
     # split meetings vs regular tasks
-    meetings = [t for t in tasks if has_meeting_tag(t)]
+    meetings = [t for t in tasks if has_meeting_tag(t) and not meeting_passed(t)]
     todos = [t for t in tasks if not has_meeting_tag(t)]
 
     lines = [header, ""]
